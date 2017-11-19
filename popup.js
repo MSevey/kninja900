@@ -4,9 +4,6 @@ function getCurrentTabURL(callback) {
   });
 }
 
-
-//TODO: Clean up comments and write real documentation on how this was executed at a later time -Erica
-
 // Initializing the variable title content and explore url
   var title;
   var moreTitle;
@@ -111,7 +108,7 @@ function getCurrentTabURL(callback) {
           jsonData.engagement.engPerPost = engPerPost(user.user.media.nodes).toFixed(2);
           jsonData.engagement.postEngRate = postEngRate(jsonData.engagement.engPerPost, user.user.followed_by.count).toFixed(2);
           jsonData.engagement.likeCommentRatio = commentLikeRatio(user).toFixed(2);
-          jsonData.engagement.fake_followers = fakeFollowers();
+          jsonData.engagement.fake_followers = fakeFollowers(jsonData.engagement.postEngRate, jsonData.followers);
 
           // Determine influencerType
           switch (true) {
@@ -169,9 +166,9 @@ function getCurrentTabURL(callback) {
           jsonData.lifetime_engagement.likesPerPost = likesPerPost(user.user.media.nodes).toFixed(2);
           jsonData.lifetime_engagement.commentsPerPost = commentsPerPost(user.user.media.nodes).toFixed(2);
           jsonData.lifetime_engagement.engPerPost = engPerPost(user.user.media.nodes).toFixed(2);
-          jsonData.lifetime_engagement.postEngRate = postEngRate(jsonData.engagement.engPerPost, user.user.followed_by.count).toFixed(2);
+          jsonData.lifetime_engagement.postEngRate = postEngRate(jsonData.lifetime_engagement.engPerPost, user.user.followed_by.count).toFixed(2);
           jsonData.lifetime_engagement.likeCommentRatio = commentLikeRatio(user).toFixed(2);
-          jsonData.lifetime_engagement.fake_followers = fakeFollowers();
+          jsonData.lifetime_engagement.fake_followers = fakeFollowers(jsonData.lifetime_engagement.postEngRate, jsonData.followers);
 
           // Capturing the contents of the title tag
           moreTitle = $("title").html();
@@ -188,36 +185,41 @@ function getCurrentTabURL(callback) {
 
 // Updating data object
   function updateData() {
-    data.fullName: jsonData.fullName;
-    data.email : jsonData.email;
-    data.instagramAccount.id : jsonData.id;
-    data.instagramAccount.handle : jsonData.handle;
-    data.instagramAccount.followersCount : jsonData.followers;
-    data.instagramAccount.followingCount : jsonData.following;
-    data.instagramAccount.fullName : jsonData.fullName;
-    data.instagramAccount.profilePicture : jsonData.profilePicture;
-    data.instagramAccount.bio : jsonData.bio;
-    data.instagramAccount.mediaCount: jsonData.mediaCount;
-    data.instagramAccount.averageLikes : jsonData.engagement.likesPerPost;
-    data.instagramAccount.averageComments : jsonData.engagement.commentsPerPost;
-    data.instagramAccount.sponsoredPostRate : jsonData.sponsorPosts;
+    data.fullName = jsonData.fullName;
+    data.email = jsonData.email;
+    data.instagramAccount.id = jsonData.id;
+    data.instagramAccount.handle = jsonData.handle;
+    data.instagramAccount.followersCount = jsonData.followers;
+    data.instagramAccount.followingCount = jsonData.following;
+    data.instagramAccount.fullName = jsonData.fullName;
+    data.instagramAccount.profilePicture = jsonData.profilePicture;
+    data.instagramAccount.bio = jsonData.bio;
+    data.instagramAccount.mediaCount = jsonData.mediaCount;
+    data.instagramAccount.averageLikes = jsonData.engagement.likesPerPost;
+    data.instagramAccount.averageComments = jsonData.engagement.commentsPerPost;
+    data.instagramAccount.sponsoredPostRate = jsonData.sponsorPosts;
   }
 
-// userJson.user.media.nodes every image
-//userJson.user.media.nodes.length is the size of the array
-// userJson.user.media.nodes[i] object
-//userJson.user.media.nodes[0].comments.count comment count
-//userJson.user.media.nodes[0].likes.count like count
+// Calculating Comment to Like ratio for each post and averaging across posts
   function commentLikeRatio(userJson) {
     var sumRatios = 0;
     var nodes = userJson.user.media.nodes.length;
     for (i = 0; i < nodes; i++) {
-      sumRatios += userJson.user.media.nodes[i].likes.count / userJson.user.media.nodes[i].comments.count;
+      var commentCount = userJson.user.media.nodes[i].comments.count;
+      var likeCount = userJson.user.media.nodes[i].likes.count;
+      if (likeCount != 0) {
+        sumRatios += commentCount / likeCount
+      }
     }
-    var avg = sumRatios/nodes;
-      return avg;
+    if (nodes != 0) {
+      var avg = (sumRatios/nodes) * 100;
+    } else {
+      var avg = 0;
+    }
+    return avg;
   }
 
+// checking for hashtags that would suggest the user has sponsors
   function sponsorMetrics(userJson){
     var sponsorPostCount = 0;
     var items = userJson.nodes.length;
@@ -239,7 +241,7 @@ function getCurrentTabURL(callback) {
     return sponsorPostCount;
   }
 
-// checks if the user ison instagram.com
+// checks if the user is on instagram.com
   function onInstagram(url) {
     if(url.indexOf("instagram.com") > -1) {
       // alert("you are on an instagram page when you refresh the page");
@@ -248,7 +250,6 @@ function getCurrentTabURL(callback) {
   }
 
 // function for identifying if on user page
-// how is this actually working?  can we make it more specific for user only?
   function onUserPage(url) {
     var exp = "instagram\.com\/([\.a-z0-9_-]+?)\/$";
     var regex = new RegExp(exp); //instagram.com/[user]/
@@ -345,7 +346,7 @@ function getCurrentTabURL(callback) {
     }
   }
 
-// sending JSON to endpoint - will be Mavrck API
+// sending JSON to Mavrck DB
   function sendJSON (json) {
     var data = JSON.stringify(json);
     $.ajax({
@@ -363,33 +364,30 @@ function getCurrentTabURL(callback) {
             console.log(msg);
         }
     });
-}
+  }
 
 // Fake followers
-  function fakeFollowers() {
+  function fakeFollowers(postEngRate, followers) {
     switch (true) {
-      case jsonData.followers > 1000000:
-        return engCheck(jsonData.engagement.postEngRate, 1.66, 0.06);
+      case followers > 1000000:
+        return engCheck(postEngRate, 1.66, 0.06);
         break;
-      case jsonData.followers > 100000:
-        return engCheck(jsonData.engagement.postEngRate, 1.78, 0.09);
+      case followers > 100000:
+        return engCheck(postEngRate, 1.78, 0.09);
         break;
-      case jsonData.followers > 10000:
-        return engCheck(jsonData.engagement.postEngRate, 2.37, 0.14);
+      case followers > 10000:
+        return engCheck(postEngRate, 2.37, 0.14);
         break;
-      case jsonData.followers > 1000:
-        return engCheck(jsonData.engagement.postEngRate, 4.04, 0.27);
+      case followers > 1000:
+        return engCheck(postEngRate, 4.04, 0.27);
         break;
       default:
-        return engCheck(jsonData.engagement.postEngRate, 8.03, 0.56);
+        return engCheck(postEngRate, 8.03, 0.56);
         break;
     }
   }
 
   function engCheck(postEngRate, perPerc, crPerc) {
-    console.log("post engagement rate:" + postEngRate);
-    console.log("engRate %:" + perPerc);
-    console.log("comment rate %:" + crPerc);
     if (postEngRate > perPerc || postEngRate < crPerc) {
       return "warning";
     } else {
@@ -403,23 +401,34 @@ function getCurrentTabURL(callback) {
     document.getElementById('engRate').innerHTML = jsonData.engagement.engPerPost;
     document.getElementById('avgComments').innerHTML = jsonData.engagement.commentsPerPost;
     document.getElementById('avgLikes').innerHTML =  jsonData.engagement.likesPerPost;
+    document.getElementById('dangerCheckData').innerHTML =  jsonData.engagement.postEngRate;
     if (jsonData.engagement.fake_followers == "good") {
       $("#fake_followers").hide();
     } else {
       $("#fake_followers").show();
     }
+
+    if (jsonData.email) {
+      $("#safetyCheck").text("Contactable");
+      document.getElementById('contactPic').src = "images/check.png";
+    } else {
+      $("#safetyCheck").text("Non Contactable");
+      document.getElementById('contactPic').src = "images/xicon.png";
+    }
+
   }
 
   function updateMoreUI() {
-    document.getElementById('iType').innerHTML = jsonData.influencerType;
     document.getElementById('engRate').innerHTML = jsonData.lifetime_engagement.engPerPost;
     document.getElementById('avgComments').innerHTML = jsonData.lifetime_engagement.commentsPerPost;
     document.getElementById('avgLikes').innerHTML =  jsonData.lifetime_engagement.likesPerPost;
+    document.getElementById('dangerCheckData').innerHTML =  jsonData.lifetime_engagement.postEngRate;
     if (jsonData.lifetime_engagement.fake_followers == "good") {
       $("#fake_followers").hide();
     } else {
       $("#fake_followers").show();
     }
+
   }
 
 // Calling buildJSON to run code on load
@@ -434,25 +443,37 @@ function getCurrentTabURL(callback) {
     }
     updateUI();
 
-  });
-
-  $(".icon").on("click", function() {
-    // or just instagram
-    if (title != $('title').html()) {
-      buildJSON();
-    }
-    updateUI();
-
-  });
-
-  // Updates to all user data if Mavrck logo is clicked
-  $("#logo").on("click", function() {
     if (moreTitle != $('title').html()) {
       buildMore();
     }
-    updateMoreUI();
+  });
+
+  $(".slider").on("click", function() {
+    var $this = $(this);
+    var clickCounter = $this.data('clickCounter') || 0;
+    clickCounter += 1;
+    $this.data('clickCounter', clickCounter);
+    console.log($this.data('clickCounter'));
+    if ($this.data('clickCounter') % 2 == 0) {
+      if (title != $('title').html()) {
+        buildJSON();
+      }
+      updateUI();
+    } else {
+      if (moreTitle != $('title').html()) {
+        buildMore();
+      }
+      updateMoreUI();
+    }
+
   });
 
   $(".btn").on("click", function() {
     sendJSON(data);
+  });
+
+  $(".fake_followers").on("click", function() {
+    $("#fakeRate").show();
+    $("#dangerCheckData").show();
+    $("#dangerCheck").hide();
   });
